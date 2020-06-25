@@ -106,7 +106,7 @@ Opening it in another tabs gives us what every hacker wants, code execution on t
 
 <p>Now jQuery is already present, that will make some things easier <span class="paranthesis">(at least for me)</span>.
 Crafting the payload within an IIFE <span class="paranthesis">(Immediately Invoked Function Expression)</span> waiting for the DOM to load:</p>
-<code><pre>
+<pre>
 (function(){
   $(document).ready(function () {
     $.get( "/admin/admin_settings.php", function(htmldata) {
@@ -144,7 +144,7 @@ Crafting the payload within an IIFE <span class="paranthesis">(Immediately Invok
     }
   });
 })()
-</pre></code>
+</pre>
 
 <p>I noticed that the PHP file is not deleted if I change the setting back. Stealth is offered, as you can see in the script above, we take it.
 There we have it, a stealthy gh0st exploit resulting in RCE on target webserver! Well, this makes the assumption that this evil ticket lands with the admin user of the helpdesk system. We all know whose mother assumption really is. So let's improve on this.</p>
@@ -156,7 +156,7 @@ Doing some more research reveals that the send message to other users' page actu
 
 Armed with this knowledge, we make our payload request the admin/mail.php page to get the lowest number user in the list <span class="paranthesis">(except 0)</span> and either reassign the ticket to admin user if we have sufficient privileges to do so, or otherwise phish the admin user with an intriguing message linking to our poisoned ticket :D.</p>
 
-<code><pre>
+<pre>
 (function(){
   $(document).ready(function () {
     var token = 0;
@@ -284,11 +284,11 @@ Armed with this knowledge, we make our payload request the admin/mail.php page t
   });
 }); 
 })()
-</pre></code>
+</pre>
 
 <p>Now that's a lot better <span class="paranthesis">(except for my coding skills :D)</span>. Let's compliment this payload with a python script exploiting the XSS vulnerability:</p>
 
-<code><pre>
+<pre>
 #!/usr/bin/python
 import sys
 import requests
@@ -342,7 +342,7 @@ def main():
 if __name__ == "__main__":
   main()
 
-</pre></code>
+</pre>
 
 <p>Note that this will not work if the target has some kind of captcha enabled <span class="paranthesis">(not enabled by default)</span>. But that is just one request for you to send via Burp if need be. At last, remember the <code>screen_resolution_height</code> and <code>screen_resolution_width</code> in submit_ticket.php?
 Well, they are actually both vulnerable to SQL injection. We did not need this vulnerability to bypass authentication here. This attack should work on Mods for HESK versions between -2019.1.0- and -June 28 2017 Version 3.1.0- as these are vulnerable to SQL injection, XSS and RCE.</p>
