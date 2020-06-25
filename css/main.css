@@ -104,3 +104,9 @@ footer .social-link{width:32px;padding-left:4px;padding-right:4px}
 footer .license-link{display:block;font-size:12px;font-weight:normal}
 #wrapper{min-height:calc(100vh - 110px)}
 .paranthesis{color:#888;}
+code {
+	background: #666;
+    padding: 1px;
+    border: 1px solid orange;
+    color: orange;
+}
